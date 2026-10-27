@@ -114,6 +114,16 @@ button.chip{min-height:32px}
 .lvl{font-family:var(--f-display);font-size:32px;color:var(--accent);line-height:1}
 .habit{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
 .hname{font-weight:600;overflow-wrap:anywhere}
+.nameline{display:flex;align-items:center;gap:6px;min-width:0}
+.nameline .hname{min-width:0}
+.help{
+  flex:none;width:26px;height:26px;margin-top:-1px;padding:0;border-radius:50%;
+  border:1px solid var(--line);background:transparent;color:var(--mute);
+  font-family:var(--f-display);font-weight:700;font-size:14px;line-height:1;
+  display:grid;place-items:center;
+}
+.help[aria-expanded="true"]{color:var(--accent);border-color:var(--accent);background:var(--accent-dim)}
+.hint{margin:4px 0 0;font-size:13px;line-height:1.4;color:var(--mute);font-weight:400}
 .check{width:44px;height:44px;border-radius:50%;border:2px solid var(--line);background:transparent;display:grid;place-items:center;padding:0}
 .check svg{opacity:0}
 .check.off{opacity:.35}
@@ -135,7 +145,12 @@ button.chip{min-height:32px}
 .steps i.on{background:var(--accent)}
 .choices{display:flex;flex-direction:column;gap:10px}
 .choice{text-align:left;background:var(--surface2);border:2px solid transparent;border-radius:14px;padding:12px;min-height:72px;display:flex;flex-direction:column;gap:4px}
-.choice[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-dim)}
+.choice[aria-pressed="true"],.choice.on{border-color:var(--accent);background:var(--accent-dim)}
+.choice{position:relative}
+.areahit{position:absolute;inset:0;z-index:0;background:transparent;border:0;border-radius:inherit;padding:0}
+.choice>b,.choice .ex,.choice>.hint{position:relative;z-index:1}
+.choice>b,.choice .ex{pointer-events:none}
+.choice .help{pointer-events:auto}
 .choice b{font-family:var(--f-display);text-transform:uppercase;letter-spacing:.04em;font-size:20px;line-height:1.05}
 .choice.locked{opacity:.8}
 nav{
@@ -231,6 +246,41 @@ var INTENS = {
   std: {n: 'Committed', per: 2, d: '2 habits in each area you picked'},
   hard: {n: 'Relentless', per: 3, d: '3 habits in each area you picked'}
 };
+var HINTS = {
+  'Move for 30 minutes': 'Any movement for half an hour. A walk counts. Scrolling does not.',
+  'Train hard': 'A workout that costs you something. Lift, run, or practice with real effort.',
+  'Hit a step goal': 'Reach the step count you already aim for. If you have no number, 8,000 is a fair one.',
+  'Stretch 10 minutes': 'Ten minutes on the floor for hips, back, and whatever is tight.',
+  'Read 10 pages': 'Ten pages of a book. Articles, email, and feeds do not count.',
+  'Deep work block': 'One stretch on a single hard task, with nothing else open. Phone in another room. Twenty-five minutes counts. The Focus tab can time it.',
+  'Sit quietly 10 minutes': 'Ten minutes with nothing playing. No phone, no podcast. Sitting still is the rep.',
+  'Learn one useful thing': 'One fact or skill you could use later. A page, a short lesson, a how-to.',
+  'Reach out to someone': 'A real message or call to a person. A like or a story reply does not count.',
+  'See someone in person': 'Time face to face. A coffee, a walk, a meal.',
+  'Give one real compliment': 'Name one specific thing you noticed. "Nice" does not count.',
+  'Out of bed on time': 'Feet on the floor at the time you chose. No snooze.',
+  'No alcohol today': 'Check it only on a day you did not drink.',
+  'Phone-free first hour': 'The first hour after you wake, phone left alone.',
+  'Plan tomorrow tonight': 'Before sleep, write the first thing you will do tomorrow.',
+  'No junk food today': 'A day you skipped the food you already decided is off the list.',
+  '50 bodyweight squats': 'Fifty squats, no equipment. Break them up if you need to.',
+  '20 pushups, anywhere': 'Twenty pushups. Knees count if that is your honest set.',
+  '10 minute walk outside': 'Ten minutes outdoors. The point is leaving the building.',
+  'Plank for 60 seconds': 'Hold a plank for one minute. Knees down still counts if the minute is honest.',
+  'Take the stairs every time today': 'Stairs instead of the elevator, each time you have the choice.',
+  'One hour with no new tabs': 'One hour of work without opening a new tab or app.',
+  '10 minutes of stillness, phone in another room': 'Ten quiet minutes. The phone is in a different room, not face down beside you.',
+  'Write tomorrow\'s first task before bed': 'One line: the first thing you will do tomorrow. Write it before you sleep.',
+  'Send a voice note you have been avoiding': 'The message you keep putting off. Say it out loud and send it.',
+  'One meal with no phone': 'One meal with the phone off the table.',
+  'Thank someone for something specific': 'Name the thing they did. Send it or say it today.',
+  'Phone away for a whole conversation': 'One conversation, start to finish, with the phone not in your hand.',
+  'Make the bed before you leave the room': 'Bed made before you walk out. That is the whole task.',
+  'No phone for the first 30 minutes': 'The first half hour after you wake, phone untouched.',
+  'Cold shower, one full minute': 'One minute under cold water. A splash at the end of a hot shower does not count.',
+  'No snooze': 'The alarm rings once. You get up.',
+  'Kitchen clean before you sit down tonight': 'Counters clear and dishes done before you sit for the evening.'
+};
 var CHALLENGES = [
   {name: '50 bodyweight squats', stat: 'phys', xp: 15},
   {name: '20 pushups, anywhere', stat: 'phys', xp: 15},
@@ -301,7 +351,7 @@ var UI = {
   timer: {dur: 25, running: false, end: 0, left: 25 * 60, date: ''},
   sleepVal: 7.5, resetAsk: false, backfill: false, heat: '', just: null,
   sound: false, notePerm: ('Notification' in window) ? Notification.permission : 'unsupported',
-  bootNote: '', pending: null
+  bootNote: '', pending: null, hint: ''
 };
 var tickId = null, capT = null, toastT = null, actx = null, wake = null, chime = [];
 var keepScroll = true, shownDay = '';
@@ -695,6 +745,24 @@ function dowPicker(days, scope) {
     return '<button type="button" class="dow" data-act="dow" data-scope="' + scope + '" data-i="' + i + '" aria-pressed="' + (days.indexOf(i) >= 0) + '" aria-label="' + DNAMES[i] + '">' + letter + '</button>';
   }).join('') + '</div>';
 }
+function hintFor(name) {
+  if (HINTS[name]) return HINTS[name];
+  var want = String(name || '').toLowerCase(), found = '';
+  Object.keys(HINTS).some(function (k) {
+    if (k.toLowerCase() === want) { found = HINTS[k]; return true; }
+  });
+  return found;
+}
+function helpBtn(name) {
+  if (!hintFor(name)) return '';
+  var open = UI.hint === name;
+  return '<button type="button" class="help" data-act="hint" data-v="' + esc(name) + '" aria-expanded="' + open + '" aria-label="What ' + esc(name) + ' means">?</button>';
+}
+function hintLine(name) {
+  if (UI.hint !== name) return '';
+  var text = hintFor(name);
+  return text ? '<p class="hint">' + esc(text) + '</p>' : '';
+}
 function habitRow(h, k, d) {
   var on = isSched(h, d);
   var checked = !!(on && h.days[k]);
@@ -705,8 +773,8 @@ function habitRow(h, k, d) {
     : '<span class="check off" aria-hidden="true"></span>';
   var right = UI.manage ? '' : '<span class="xp">+' + h.xp + '</span>';
   var html = '<div class="habit ' + STATS[h.stat].cls + (checked ? ' done' : '') + (UI.just === h.id ? ' just' : '') + '">' + left +
-    '<div style="min-width:0"><div class="hname">' + esc(h.name) + '</div><div class="small mute"><span class="dot"></span>' + STATS[h.stat].name + ' · ' + esc(dowLabel(h)) +
-    (st ? ' · <span class="mono">' + st + 'd</span>' : '') + (on ? '' : ' · not this day') + '</div>' +
+    '<div style="min-width:0"><div class="nameline"><div class="hname">' + esc(h.name) + '</div>' + helpBtn(h.name) + '</div><div class="small mute"><span class="dot"></span>' + STATS[h.stat].name + ' · ' + esc(dowLabel(h)) +
+    (st ? ' · <span class="mono">' + st + 'd</span>' : '') + (on ? '' : ' · not this day') + '</div>' + hintLine(h.name) +
     (UI.manage ? '<div class="row" style="gap:14px"><button type="button" class="link" data-act="edit" data-id="' + esc(h.id) + '">' + (editing ? 'Close' : 'Edit') + '</button><button type="button" class="link" data-act="archive" data-id="' + esc(h.id) + '">Archive</button></div>' : '') +
     '</div>' + right + '</div>';
   if (editing) {
@@ -717,7 +785,7 @@ function habitRow(h, k, d) {
   return html;
 }
 function challengeBlock(ch) {
-  return '<div class="challenge ' + STATS[ch.stat].cls + '"><div class="kicker">Daily challenge</div><div class="hname">' + esc(ch.name) + '</div>' +
+  return '<div class="challenge ' + STATS[ch.stat].cls + '"><div class="kicker">Daily challenge</div><div class="nameline"><div class="hname">' + esc(ch.name) + '</div>' + helpBtn(ch.name) + '</div>' + hintLine(ch.name) +
     '<div class="small mute"><span class="dot"></span>' + STATS[ch.stat].name + ' · +' + ch.xp + ' XP</div>' +
     '<div class="row"><button type="button" class="btn" data-act="chdone">Done</button><button type="button" class="btn ghost" data-act="chskip">Skip</button></div></div>';
 }
@@ -1029,7 +1097,12 @@ function viewOnboard() {
     body = '<h2>Where do you want to grow?</h2><p class="mute small">Discipline stays on. Add any other areas.</p><div class="choices">' +
       SKEYS.map(function (k) {
         var on = k === 'disc' || o.areas.indexOf(k) >= 0;
-        return '<button type="button" class="choice ' + STATS[k].cls + (k === 'disc' ? ' locked' : '') + '" data-act="area" data-v="' + k + '" aria-pressed="' + on + '"><b><span class="dot"></span>' + STATS[k].name + '</b><span class="small mute">' + LIB[k].slice(0, 2).map(function (x) { return esc(x[0]); }).join(' · ') + '</span></button>';
+        return '<div class="choice ' + STATS[k].cls + (on ? ' on' : '') + (k === 'disc' ? ' locked' : '') + '">' +
+          '<button type="button" class="areahit" data-act="area" data-v="' + k + '" aria-pressed="' + on + '" aria-label="' + STATS[k].name + '"></button>' +
+          '<b aria-hidden="true"><span class="dot"></span>' + STATS[k].name + '</b>' +
+          LIB[k].slice(0, 2).map(function (x) {
+            return '<div class="ex nameline"><span class="small mute">' + esc(x[0]) + '</span>' + helpBtn(x[0]) + '</div>' + hintLine(x[0]);
+          }).join('') + '</div>';
       }).join('') + '</div><div class="row"><button type="button" class="btn ghost" data-act="obback">Back</button><button type="button" class="btn" data-act="obnext">Continue</button></div>';
   } else if (o.step === 2) {
     body = '<h2>How hard?</h2><div class="choices">' + Object.keys(INTENS).map(function (k) {
@@ -1042,7 +1115,7 @@ function viewOnboard() {
     var P = plan.reduce(function (a, b) { return a + b.xp; }, 0);
     body = '<h2>The next 90 days</h2><p class="small mute">Level if you clear this much of a ' + P + ' XP day.</p><div class="svgwrap">' + projChart(P) + '</div>' +
       '<div class="legend"><span><span class="dot" style="background:var(--mute)"></span>50% → L' + lvl(P * 0.5 * 90, 80) + '</span><span><span class="dot" style="background:var(--accent)"></span>80% → L' + lvl(P * 0.8 * 90, 80) + '</span><span><span class="dot" style="background:var(--good)"></span>100% → L' + lvl(P * 90, 80) + '</span></div>' +
-      plan.map(function (p) { return '<div class="row between ' + STATS[p.stat].cls + '"><span><span class="dot"></span>' + esc(p.name) + '</span><span class="xp">+' + p.xp + '</span></div>'; }).join('') +
+      plan.map(function (p) { return '<div class="' + STATS[p.stat].cls + '"><div class="row between" style="align-items:flex-start"><span class="nameline" style="flex:1"><span><span class="dot"></span>' + esc(p.name) + '</span>' + helpBtn(p.name) + '</span><span class="xp">+' + p.xp + '</span></div>' + hintLine(p.name) + '</div>'; }).join('') +
       '<p class="small mute">You can edit every habit after this.</p><div class="row"><button type="button" class="btn ghost" data-act="obback">Back</button><button type="button" class="btn" data-act="begin">Start today</button></div>';
   }
   return '<div class="card onboard"><div class="steps" aria-hidden="true">' + steps + '</div>' + body + '</div>';
@@ -1315,8 +1388,9 @@ document.addEventListener('click', function (e) {
   captureFields();
   UI.just = null;
   var a = el.dataset.act, v = el.dataset.v, id = el.dataset.id, skip = false, h, before, after;
-  if (a === 'tab') {
-    UI.tab = v; UI.resetAsk = false; UI.backfill = false; UI.manage = false; UI.editId = null; UI.pending = null;
+  if (a === 'hint') { UI.hint = UI.hint === v ? '' : (v || ''); }
+  else if (a === 'tab') {
+    UI.tab = v; UI.resetAsk = false; UI.backfill = false; UI.manage = false; UI.editId = null; UI.pending = null; UI.hint = '';
     keepScroll = false;
   } else if (a === 'arch') UI.ob.arch = ARCH[v] ? v : UI.ob.arch;
   else if (a === 'area') {

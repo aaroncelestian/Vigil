@@ -1,4 +1,4 @@
-var CACHE = 'vigil-3';
+var CACHE = 'vigil-4';
 var ASSETS = [
   './',
   './index.html',
@@ -7,6 +7,7 @@ var ASSETS = [
   './legal.css',
   './manifest.webmanifest',
   './assets/icon.svg',
+  './assets/icon-32.png',
   './assets/icon-180.png',
   './assets/icon-192.png',
   './assets/icon-512.png'

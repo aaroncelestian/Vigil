@@ -1070,6 +1070,8 @@ function viewYou(t) {
     '<button type="button" data-act="theme" data-v="light" aria-pressed="' + (theme === 'light') + '">Light</button></div>' +
     '<button type="button" class="btn ghost" data-act="sound">' + (UI.sound ? 'Sound on' : 'Sound off') + '</button>' +
     '<p class="small mute">Saved only on this phone. ' + esc(backupLabel()) + '.</p>' +
+    '<button type="button" class="btn ghost" data-act="reloadapp">Reload</button>' +
+    '<p class="small mute">Loads the latest version. Your log stays on this phone.</p>' +
     '<button type="button" class="btn" data-act="export">Share backup</button>' +
     '<button type="button" class="btn ghost" data-act="copy">Copy backup</button>' +
     '<button type="button" class="btn ghost" data-act="import">Restore a backup</button></div>';
@@ -1530,6 +1532,13 @@ document.addEventListener('click', function (e) {
     UI.sound = !UI.sound;
     try { localStorage.setItem('dawg-sound', UI.sound ? '1' : '0'); } catch (err) {}
     if (UI.sound) blip(660);
+  } else if (a === 'reloadapp') {
+    skip = true;
+    var go = function () { location.reload(); };
+    if (!navigator.serviceWorker) { go(); return; }
+    navigator.serviceWorker.getRegistration().then(function (reg) {
+      return reg ? reg.update() : null;
+    }).then(go, go);
   } else if (a === 'export') { exportBackup(); skip = true; }
   else if (a === 'copy') {
     var json = JSON.stringify(S);
@@ -1694,7 +1703,9 @@ setInterval(function () {
 
 if ('serviceWorker' in navigator && (location.protocol === 'http:' || location.protocol === 'https:')) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('./sw.js', {scope: './'}).catch(function () {});
+    navigator.serviceWorker.register('./sw.js', {scope: './'}).then(function (reg) {
+      return reg.update();
+    }).catch(function () {});
   });
 }
 })();

@@ -1,4 +1,4 @@
-var CACHE = 'vigil-5';
+var CACHE = 'vigil-6';
 var ASSETS = [
   './',
   './index.html',

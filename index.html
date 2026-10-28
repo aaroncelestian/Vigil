@@ -194,6 +194,15 @@ nav button[aria-current="page"]{color:var(--accent);background:var(--surface2)}
   font-family:var(--f-display);font-weight:700;letter-spacing:.05em;text-transform:uppercase;
   pointer-events:none;max-width:min(420px, calc(100% - 32px));white-space:normal;text-align:center;line-height:1.25;border-radius:16px;
 }
+.jnav{align-self:flex-start;text-align:left}
+.jlist{display:flex;flex-direction:column}
+.jrow{
+  text-align:left;background:transparent;color:inherit;border:0;border-top:1px solid var(--line);
+  padding:12px 0;width:100%;display:flex;flex-direction:column;gap:4px;min-height:56px;border-radius:0;
+}
+.jlist .jrow:first-child{border-top:0;padding-top:0}
+.jpreview{color:var(--mute);font-size:14px;line-height:1.4}
+.jbody{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5}
 @media (max-width:360px){
   .hero{grid-template-columns:80px 1fr;gap:10px}
   .ring{width:80px!important;height:80px!important}
@@ -350,6 +359,7 @@ var UI = {
   ob: {step: 0, name: '', arch: 'wolf', areas: ['phys', 'ment', 'disc'], inten: 'std'},
   timer: {dur: 25, running: false, end: 0, left: 25 * 60, date: ''},
   sleepVal: 7.5, resetAsk: false, backfill: false, heat: '', just: null,
+  journalPage: false, journalDay: '',
   sound: false, notePerm: ('Notification' in window) ? Notification.permission : 'unsupported',
   bootNote: '', pending: null, hint: ''
 };
@@ -384,6 +394,11 @@ function fmtDay(k) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(k)) return '';
   var p = k.split('-');
   return new Date(+p[0], +p[1] - 1, +p[2]).toLocaleDateString(undefined, {weekday: 'short', month: 'short', day: 'numeric'});
+}
+function fmtDayLong(k) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(k)) return '';
+  var p = k.split('-');
+  return new Date(+p[0], +p[1] - 1, +p[2]).toLocaleDateString(undefined, {weekday: 'long', month: 'short', day: 'numeric', year: 'numeric'});
 }
 function niceToday(d) {
   return d.toLocaleDateString(undefined, {weekday: 'long', month: 'short', day: 'numeric'});
@@ -1002,8 +1017,107 @@ function journalHint() {
   var len = (S.journal[key(today())] || '').trim().length;
   return len >= 40 ? '8 Mental XP logged for today' : (40 - len) + ' characters to log XP';
 }
+function journalDays() {
+  return Object.keys(S.journal).filter(function (k) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(k) && (S.journal[k] || '').trim();
+  }).sort(function (a, b) { return a < b ? 1 : -1; });
+}
+function journalPreview(text) {
+  var s = String(text || '').trim().replace(/\s+/g, ' ');
+  return s.length > 110 ? s.slice(0, 110) + '…' : s;
+}
+function journalExport(days) {
+  var parts = [APP + ' journal', ''];
+  (days || []).forEach(function (k, i) {
+    if (i) parts.push('', '---', '');
+    parts.push(fmtDayLong(k));
+    parts.push(lineFor(k, PROMPTS, 'p'));
+    parts.push('');
+    parts.push(String(S.journal[k] || '').trim());
+  });
+  parts.push('');
+  return parts.join('\n');
+}
+function journalPayload() {
+  var days = journalDays();
+  if (UI.journalDay) days = days.filter(function (k) { return k === UI.journalDay; });
+  return {
+    days: days,
+    text: journalExport(days),
+    file: UI.journalDay ? 'vigil-journal-' + UI.journalDay + '.txt' : 'vigil-journal.txt',
+    title: days.length === 1 ? APP + ' · ' + fmtDayLong(days[0]) : APP + ' journal'
+  };
+}
+function downloadText(text, filename) {
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], {type: 'text/plain'}));
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 1500);
+  toast('Journal downloading');
+}
+function shareJournal() {
+  var p = journalPayload();
+  if (!p.days.length) { toast('Nothing to export'); return; }
+  try {
+    if (navigator.share) {
+      navigator.share({title: p.title, text: p.text}).catch(function (err) {
+        if (err && err.name === 'AbortError') return;
+        downloadText(p.text, p.file);
+      });
+      return;
+    }
+  } catch (e) {}
+  downloadText(p.text, p.file);
+}
+function copyJournal() {
+  var p = journalPayload();
+  if (!p.days.length) { toast('Nothing to export'); return; }
+  var ok = p.days.length === 1 ? 'Day copied' : 'Journal copied';
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(p.text).then(function () { toast(ok); }).catch(function () { fallbackCopy(p.text, ok); });
+  } else fallbackCopy(p.text, ok);
+}
+function journalExportBtns() {
+  return '<div class="row"><button type="button" class="btn" data-act="journalshare">Share</button><button type="button" class="btn ghost" data-act="journalcopy">Copy</button></div>';
+}
+function viewJournal() {
+  var days = journalDays();
+  var day = UI.journalDay;
+  if (day && days.indexOf(day) < 0) UI.journalDay = day = '';
+  if (day) {
+    var text = String(S.journal[day] || '').trim();
+    var xp = text.length >= 40;
+    return '<div class="card"><button type="button" class="link jnav" data-act="journalback">All entries</button>' +
+      '<div class="kicker">' + esc(fmtDayLong(day)) + '</div><h2>Journal</h2>' +
+      '<p class="small">' + esc(lineFor(day, PROMPTS, 'p')) + '</p>' +
+      '<p class="jbody">' + esc(text) + '</p>' +
+      '<p class="small mute">' + (xp ? '8 Mental XP' : text.length + ' characters') +
+      (day === key(today()) ? ' · still open on Life' : '') + '</p>' +
+      journalExportBtns() + '</div>';
+  }
+  var html = '<div class="card"><button type="button" class="link jnav" data-act="journalback">Back to Life</button>' +
+    '<h2>Journal</h2>' +
+    (days.length
+      ? '<p class="small mute">' + days.length + (days.length === 1 ? ' day written' : ' days written') + '. Share or copy as plain text.</p>' + journalExportBtns()
+      : '<p class="small mute">Nothing written yet. Today\'s prompt is on Life.</p>');
+  html += '</div>';
+  if (days.length) {
+    html += '<div class="card"><div class="jlist">' + days.map(function (k) {
+      var body = String(S.journal[k] || '').trim();
+      var todayMark = k === key(today()) ? '<span class="chip hot">Today</span>' : '';
+      return '<button type="button" class="jrow" data-act="journalday" data-v="' + k + '">' +
+        '<span class="row between"><span>' + esc(fmtDay(k)) + (k.slice(0, 4) !== String(today().getFullYear()) ? ' <span class="mute mono">' + k.slice(0, 4) + '</span>' : '') + '</span>' +
+        '<span class="row" style="gap:8px">' + todayMark + (body.length >= 40 ? '<span class="mono small mute">8 XP</span>' : '') + '</span></span>' +
+        '<span class="jpreview">' + esc(journalPreview(body)) + '</span></button>';
+    }).join('') + '</div></div>';
+  }
+  return html;
+}
 function viewLife(t) {
-  var d14 = last(14), tk = key(today());
+  var d14 = last(14), tk = key(today()), jn = journalDays().length;
   var wv = d14.map(function (d) {
     var k = key(d);
     return S.workouts.filter(function (w) { return w.date === k; }).reduce(function (a, w) { return a + w.min; }, 0);
@@ -1027,7 +1141,8 @@ function viewLife(t) {
     }).join('') : '') + '</div>' +
     '<div class="card"><h2>Journal</h2><p class="small">' + esc(lineFor(key(today()), PROMPTS, 'p')) + '</p>' +
     '<textarea id="journal" maxlength="4000" spellcheck="true" autocapitalize="sentences" placeholder="A few honest lines.">' + esc(S.journal[tk] || '') + '</textarea>' +
-    '<p class="small mute" id="jcount">' + esc(journalHint()) + '</p></div>' +
+    '<p class="small mute" id="jcount">' + esc(journalHint()) + '</p>' +
+    '<button type="button" class="btn ghost" data-act="journalpage">Past entries' + (jn ? ' · ' + jn : '') + '</button></div>' +
     '<div class="card"><h2>Scratch list</h2><p class="small mute">No points. A place to dump the day.</p>' +
     '<form class="row" data-form="todo" style="align-items:flex-end"><label style="flex:1">Add<input id="todo-text" type="text" maxlength="140" autocomplete="off" enterkeyhint="done"></label><button class="btn small" type="submit">Add</button></form>' +
     (todos.length ? todos.map(function (item) {
@@ -1145,8 +1260,8 @@ function render() {
     return '<button type="button" data-act="tab" data-v="' + x[0] + '"' + (UI.tab === x[0] ? ' aria-current="page"' : '') + '>' + ICONS[x[0]] + '<span>' + x[1] + '</span></button>';
   }).join('');
   var views = {today: viewToday, progress: viewProgress, focus: viewFocus, life: viewLife, you: viewYou};
-  app.innerHTML = views[UI.tab](t);
-  if (!UI.timer.running) document.title = APP;
+  app.innerHTML = (UI.tab === 'life' && UI.journalPage) ? viewJournal() : views[UI.tab](t);
+  if (!UI.timer.running) document.title = (UI.tab === 'life' && UI.journalPage) ? 'Journal · ' + APP : APP;
   shownDay = key(today());
   window.scrollTo(0, y);
 }
@@ -1231,9 +1346,9 @@ function downloadBackup(json) {
   setTimeout(function () { URL.revokeObjectURL(a.href); }, 1500);
   toast('Backup downloading');
 }
-function fallbackCopy(json) {
+function fallbackCopy(text, okMsg) {
   var ta = document.createElement('textarea');
-  ta.value = json;
+  ta.value = text;
   ta.setAttribute('readonly', '');
   ta.style.position = 'fixed';
   ta.style.left = '-999px';
@@ -1242,8 +1357,10 @@ function fallbackCopy(json) {
   var ok = false;
   try { ok = document.execCommand('copy'); } catch (e) {}
   ta.remove();
-  if (ok) { markBackup(); toast('Backup copied'); }
-  else toast('Could not copy');
+  if (ok) {
+    if (okMsg) toast(okMsg);
+    else { markBackup(); toast('Backup copied'); }
+  } else toast('Could not copy');
 }
 
 function armAudio() {
@@ -1392,7 +1509,13 @@ document.addEventListener('click', function (e) {
   var a = el.dataset.act, v = el.dataset.v, id = el.dataset.id, skip = false, h, before, after;
   if (a === 'hint') { UI.hint = UI.hint === v ? '' : (v || ''); }
   else if (a === 'tab') {
-    UI.tab = v; UI.resetAsk = false; UI.backfill = false; UI.manage = false; UI.editId = null; UI.pending = null; UI.hint = '';
+    if (v === 'life' && UI.tab === 'life' && UI.journalPage) {
+      UI.journalDay = '';
+      UI.journalPage = false;
+    } else {
+      UI.tab = v; UI.journalPage = false; UI.journalDay = '';
+    }
+    UI.resetAsk = false; UI.backfill = false; UI.manage = false; UI.editId = null; UI.pending = null; UI.hint = '';
     keepScroll = false;
   } else if (a === 'arch') UI.ob.arch = ARCH[v] ? v : UI.ob.arch;
   else if (a === 'area') {
@@ -1478,6 +1601,16 @@ document.addEventListener('click', function (e) {
     if (h) { h.archived = false; persist(); }
   } else if (a === 'showarch') UI.showArchived = !UI.showArchived;
   else if (a === 'backfill') UI.backfill = !UI.backfill;
+  else if (a === 'journalpage') { UI.journalPage = true; UI.journalDay = ''; keepScroll = false; }
+  else if (a === 'journalback') {
+    if (UI.journalDay) UI.journalDay = '';
+    else UI.journalPage = false;
+    keepScroll = false;
+  } else if (a === 'journalday') {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v || '')) UI.journalDay = v;
+    keepScroll = false;
+  } else if (a === 'journalshare') { shareJournal(); skip = true; }
+  else if (a === 'journalcopy') { copyJournal(); skip = true; }
   else if (a === 'chdone') {
     var c = S.challenges[key(logDate())];
     if (c && !c.skipped && !c.done) {
@@ -1552,7 +1685,7 @@ document.addEventListener('click', function (e) {
     S = UI.pending;
     UI.pending = null;
     S.updated = Date.now();
-    UI.tab = 'today'; UI.manage = false; UI.editId = null; UI.backfill = false;
+    UI.tab = 'today'; UI.manage = false; UI.editId = null; UI.backfill = false; UI.journalPage = false; UI.journalDay = '';
     var sv = S.sleep[key(today())];
     UI.sleepVal = sv != null ? sv : 7.5;
     keepScroll = false;
@@ -1564,7 +1697,7 @@ document.addEventListener('click', function (e) {
     stopAllTimer();
     S = fresh();
     UI.ob = {step: 0, name: '', arch: 'wolf', areas: ['phys', 'ment', 'disc'], inten: 'std'};
-    UI.resetAsk = false; UI.manage = false; UI.editId = null; UI.backfill = false; UI.pending = null; UI.tab = 'today';
+    UI.resetAsk = false; UI.manage = false; UI.editId = null; UI.backfill = false; UI.pending = null; UI.journalPage = false; UI.journalDay = ''; UI.tab = 'today';
     keepScroll = false;
     persist();
   }
